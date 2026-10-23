@@ -61,13 +61,13 @@ fn e2e_with_known_length_padding() {
     assert_eq!(keys_res.status_code, 200);
     let key_config = parse_key_config(keys_res.as_bytes()).unwrap();
 
-    let known_length = 1024;
+    let known_padded_bhttp_req_length = 1024;
     let client = OhttpClient::new(
         Url::parse(harness.relay_url()).unwrap(),
         Url::parse(harness.target_url()).unwrap(),
         key_config.clone(),
     )
-    .known_length(known_length);
+    .known_padded_bhttp_req_length(known_padded_bhttp_req_length);
 
     let (req, ctx) = client
         .encapsulate(

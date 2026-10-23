@@ -167,7 +167,7 @@ pub struct OhttpClient {
     relay: Url,
     /// Origin plus an optional base path.
     target: Url,
-    known_length: Option<usize>,
+    known_padded_bhttp_req_length: Option<usize>,
 }
 
 impl OhttpClient {
@@ -178,15 +178,15 @@ impl OhttpClient {
             relay,
             target,
             key_config,
-            known_length: None,
+            known_padded_bhttp_req_length: None,
         }
     }
 
-    /// Pad each BHTTP inner request to `known_length` bytes with random
-    /// trailing bytes. Encapsulation fails with [`Error::KnownLengthTooSmall`]
-    /// if a request is longer.
-    pub fn known_length(mut self, known_length: usize) -> Self {
-        self.known_length = Some(known_length);
+    /// Pad each BHTTP inner request to `known_padded_bhttp_req_length` bytes
+    /// with random trailing bytes. Encapsulation fails with
+    /// [`Error::KnownLengthTooSmall`] if a request is longer.
+    pub fn known_padded_bhttp_req_length(mut self, known_padded_bhttp_req_length: usize) -> Self {
+        self.known_padded_bhttp_req_length = Some(known_padded_bhttp_req_length);
         self
     }
 
@@ -227,7 +227,7 @@ impl OhttpClient {
         if let Some(body) = body {
             inner.write_content(body);
         }
-        let bhttp_bytes = write_bhttp_payload(&inner, self.known_length)?;
+        let bhttp_bytes = write_bhttp_payload(&inner, self.known_padded_bhttp_req_length)?;
 
         let (encapsulated, ctx) = match &self.key_config.0 {
             KeyConfigInner::Ohttp(config) => {
@@ -307,17 +307,20 @@ fn append_paths(base: &str, path: &str) -> String {
 }
 
 /// Serialize `inner` as known-length BHTTP, padded with random bytes to
-/// `known_length` if set.
-fn write_bhttp_payload(inner: &Message, known_length: Option<usize>) -> Result<Vec<u8>, Error> {
+/// `known_padded_bhttp_req_length` if set.
+fn write_bhttp_payload(
+    inner: &Message,
+    known_padded_bhttp_req_length: Option<usize>,
+) -> Result<Vec<u8>, Error> {
     let mut msg = Vec::new();
     inner.write_bhttp(Mode::KnownLength, &mut msg)?;
-    let Some(len) = known_length else {
+    let Some(len) = known_padded_bhttp_req_length else {
         return Ok(msg);
     };
     if msg.len() > len {
         return Err(Error::KnownLengthTooSmall {
             needed: msg.len(),
-            known_length: len,
+            known_padded_bhttp_req_length: len,
         });
     }
     let mut buf = vec![0u8; len];
@@ -711,8 +714,9 @@ mod tests {
     #[test]
     fn encapsulate_pads_to_known_length() {
         let server = ohttp::Server::new(test_key_config()).unwrap();
-        let known_length = 512;
-        let client = test_client(server.config().clone()).known_length(known_length);
+        let known_padded_bhttp_req_length = 512;
+        let client = test_client(server.config().clone())
+            .known_padded_bhttp_req_length(known_padded_bhttp_req_length);
 
         let (req, _) = client
             .encapsulate(
@@ -725,26 +729,26 @@ mod tests {
             .unwrap();
 
         let (inner_bytes, _) = server.decapsulate(&req.body).unwrap();
-        assert_eq!(inner_bytes.len(), known_length);
+        assert_eq!(inner_bytes.len(), known_padded_bhttp_req_length);
 
         let mut cursor = Cursor::new(&inner_bytes[..]);
         let inner = Message::read_bhttp(&mut cursor).unwrap();
         assert_eq!(inner.content(), b"hello");
         let msg_len = cursor.position() as usize;
-        assert!(msg_len < known_length);
+        assert!(msg_len < known_padded_bhttp_req_length);
         // Trailing padding is random, not zero-filled.
         assert!(inner_bytes[msg_len..].iter().any(|&b| b != 0));
     }
 
     #[test]
     fn encapsulate_rejects_known_length_too_small() {
-        let client = test_client(test_key_config()).known_length(1);
+        let client = test_client(test_key_config()).known_padded_bhttp_req_length(1);
         let result = client.encapsulate("POST", "/", &[], &[], Some(b"hello"));
         assert!(matches!(
             result,
             Err(Error::KnownLengthTooSmall {
                 needed,
-                known_length: 1
+                known_padded_bhttp_req_length: 1
             }) if needed > 1
         ));
     }

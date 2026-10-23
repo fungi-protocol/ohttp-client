@@ -27,9 +27,9 @@ impl WasmOhttpClient {
         })
     }
 
-    /// See [`OhttpClient::known_length`].
-    pub fn known_length(mut self, n: usize) -> WasmOhttpClient {
-        self.inner = self.inner.known_length(n);
+    /// See [`OhttpClient::known_padded_bhttp_req_length`].
+    pub fn known_padded_bhttp_req_length(mut self, n: usize) -> WasmOhttpClient {
+        self.inner = self.inner.known_padded_bhttp_req_length(n);
         self
     }
 
