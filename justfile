@@ -38,10 +38,12 @@ test-js: build-wasm
 # `--locked` is load-bearing: a lockfile update that raises the floor must fail
 # here, not silently.
 # `MSRV_CARGO` (set by the nix dev shell) points straight at an MSRV cargo;
-# without it we fall back to rustup's toolchain selection.
+# cargo still runs `rustc` from PATH, so pin RUSTC beside it or it builds with
+# whatever rustc PATH has (stable locally, a rustup proxy on CI).
+# Without `MSRV_CARGO` we fall back to rustup's toolchain selection.
 msrv:
     @if [ -n "${MSRV_CARGO:-}" ]; then \
-        "$MSRV_CARGO" check --locked --all-features --all-targets; \
+        RUSTC="$(dirname "$MSRV_CARGO")/rustc" "$MSRV_CARGO" check --locked --all-features --all-targets; \
     else \
         rustup toolchain list | grep -q '^{{MSRV}}' || (echo "missing toolchain: rustup toolchain install {{MSRV}}" && exit 1); \
         cargo +{{MSRV}} check --locked --all-features --all-targets; \
